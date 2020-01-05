@@ -33,7 +33,7 @@ It will save the model.pth and prints out training loss, validation loss, and va
 
 # Predict.py
 
-Basic usage: python predict.py /path/to/image checkpoint
+Basic usage: `python predict.py /path/to/image checkpoint`
 
 Options:
   - Return top KK most likely classes: `python predict.py input checkpoint --top_k 3`
