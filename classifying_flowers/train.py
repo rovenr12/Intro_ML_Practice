@@ -30,18 +30,25 @@ train_dir = data_dir + '/train'
 valid_dir = data_dir + '/valid'
 
 # Define your transforms for the training, validation, and testing sets
-data_transforms = transforms.Compose([transforms.Resize(255),
-                                      transforms.CenterCrop(224),
-                                      transforms.ToTensor(),
-                                      transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
+train_transforms = transforms.Compose([transforms.RandomRotation(30),
+                                       transforms.RandomResizedCrop(224),
+                                       transforms.RandomHorizontalFlip(),
+                                       transforms.ToTensor(),
+                                       transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
+
+valid_transforms = transforms.Compose([transforms.Resize(256),
+                                     transforms.CenterCrop(224),
+                                     transforms.ToTensor(),
+                                     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
+
 
 # Load the datasets
-train_data = datasets.ImageFolder(train_dir, transform=data_transforms)
-valid_data = datasets.ImageFolder(valid_dir, transform=data_transforms)
+train_data = datasets.ImageFolder(train_dir, transform=train_transforms)
+valid_data = datasets.ImageFolder(valid_dir, transform=valid_transforms)
 
 # Using the datasets and the trainforms, define the loaders
 trainloader = torch.utils.data.DataLoader(train_data, batch_size=32, shuffle=True)
-validloader = torch.utils.data.DataLoader(valid_data, batch_size=32, shuffle=True)
+validloader = torch.utils.data.DataLoader(valid_data, batch_size=32)
 
 
 # Load Pre-trained model function
@@ -109,14 +116,12 @@ def accuracy_test(loader):
             # Get Output & Calculate the lose
             output = model.forward(inputs)
             loss = criterion(output, labels)
-
             test_loss += loss.item()
 
             # Calculate accuracy
             ps = torch.exp(output)
-            top_p, top_class = ps.topk(1, dim=1)
-            equals = top_class == labels.view(*top_class.shape)
-            accuracy += torch.mean(equals.type(torch.FloatTensor)).item()
+            equals = (labels.data == ps.max(dim=1)[1])
+            accuracy += equals.type(torch.FloatTensor).mean()
     model.train()
     return test_loss, accuracy
 
@@ -132,8 +137,8 @@ for epoch in range(epochs):
 
         inputs, labels = inputs.to(device), labels.to(device)
         optimizer.zero_grad()
-        logps = model.forward(inputs)
-        loss = criterion(logps, labels)
+        outputs = model.forward(inputs)
+        loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
 
@@ -147,9 +152,12 @@ for epoch in range(epochs):
           f"Validation accuracy: {accuracy / len(validloader):.3f}")
 
 # Save models
+model.class_to_idx = train_data.class_to_idx
+
 checkpoint = {'state_dict': model.state_dict(),
               'arch': args.arch,
-              'hidden_units': args.hidden_units}
+              'hidden_units': args.hidden_units,
+              'class_to_idx':model.class_to_idx,}
 
 if args.save_dir is not None:
     file_name = args.save_dir + "/" + args.arch + ".pth"

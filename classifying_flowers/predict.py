@@ -63,6 +63,8 @@ def load_model(file_path):
     ]))
 
     model.classifier = classifier
+    model.load_state_dict(data['state_dict'])
+    model.class_to_idx = data['class_to_idx']
 
     if args.gpu:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -79,15 +81,23 @@ def process_image(image):
         returns an Numpy array
     """
 
-    img = image.resize((224, 224))
-    img = np.array(img)
+    width, height = image.size
+    if width > height:
+        image.resize((width * 256 // height, 256))
+    else:
+        image.resize((256, height * 256 // width))
+
+    image = image.crop(((image.width - 224) / 2, (image.height - 224) / 2, (image.width - 224) / 2 + 224,
+                        (image.height - 224) / 2 + 224))
+
+    image = np.array(image)
 
     mean = np.array([0.485, 0.456, 0.406])
     std = np.array([0.229, 0.224, 0.225])
-    img = (img / 255 - mean) / std
-    img = img.transpose((2, 0, 1))
+    image = (image / 255 - mean) / std
+    image = image.transpose((2, 0, 1))
 
-    return img
+    return image
 
 
 with open(args.category_names, 'r') as f:
@@ -107,13 +117,16 @@ with torch.no_grad():
 
 ps = torch.exp(output).cpu()
 top_p, top_class = ps.topk(args.top_k, dim=1)
+
 top_class_name = []
-probs = top_p[0].detach().numpy()
 
-for i in range(5):
-    name = top_class[0][i].numpy()
-    name += 1
-    top_class_name.append(cat_to_name.get(str(name)))
+for i in range(args.top_k):
+    index = top_class[0][i].numpy()
+    for key, value in model.class_to_idx.items():
+        if value == index:
+            top_class_name.append(key)
 
-print(probs)
-print(top_class_name)
+flower_name = [cat_to_name[i] for i in top_class_name]
+
+print(top_p.tolist()[0])
+print(flower_name)
